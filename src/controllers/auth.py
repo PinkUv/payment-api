@@ -5,7 +5,8 @@ from sqlalchemy import or_
 from src.database import get_db
 from src.models.user import User
 from src.models.account import Account
-import bcrypt
+import bcrypt, jwt, os
+
 
 router = APIRouter(prefix='/auth', tags=['auth'])
 
@@ -33,3 +34,20 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return {"message": "User created", "user_id": user.id}
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/login")
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == body.username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not bcrypt.checkpw(body.password.encode(), user.password_hash.encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = jwt.encode({"user_id": user.id}, os.getenv("JWT_SECRET"), algorithm="HS256")
+
+    return {"token": token}
